@@ -27,6 +27,54 @@ describe("msw-postgrest", () => {
     database.clear();
   });
 
+  describe("selections", () => {
+    it("simple select", async () => {
+      database.insert("tasks", { item: "empty fridge" });
+      database.insert("tasks", { item: "go shopping" });
+
+      expect((await postgrest.from("tasks").select("*")).data).toEqual([
+        { item: "empty fridge" },
+        { item: "go shopping" },
+      ]);
+    });
+    it("selective select", async () => {
+      database.insert("tasks", {
+        item: "empty fridge",
+        created_at: "2023-02-23",
+      });
+      database.insert("tasks", {
+        item: "go shopping",
+        created_at: "2023-05-23",
+      });
+
+      expect((await postgrest.from("tasks").select("created_at")).data).toEqual(
+        [{ created_at: "2023-02-23" }, { created_at: "2023-05-23" }]
+      );
+    });
+    it("complex filtered select", async () => {
+      database.insert("tasks", {
+        item: "sell curtains",
+        group_id: "grp",
+        meta: { tagColor: "red" },
+      });
+      database.insert("tasks", {
+        item: "grab lemons",
+        group_id: "grp",
+        meta: { tagColor: "green" },
+      });
+
+      expect(
+        (
+          await postgrest
+            .from("tasks")
+            .select("item, meta->>tagColor")
+            .eq("group_id", "grp")
+            .eq("meta->>tagColor", "red")
+        ).data
+      ).toEqual([{ item: "sell curtains", meta: { tagColor: "red" } }]);
+    });
+  });
+
   describe("insertions", () => {
     it("insert single items", async () => {
       await postgrest.from("tasks").insert({ item: "do chores" });
@@ -47,6 +95,35 @@ describe("msw-postgrest", () => {
         .insert({ item: "do chores" })
         .select("*");
       expect(res.data).toEqual([{ item: "do chores" }]);
+    });
+  });
+
+  describe("updates", () => {
+    it("update item by id", async () => {
+      database.insert("tasks", { item: "mop floors", id: "1234" });
+      await postgrest
+        .from("tasks")
+        .update({ item: "mop and wax floors" })
+        .eq("id", "1234");
+      expect(database.select("tasks")).toEqual([
+        { item: "mop and wax floors", id: "1234" },
+      ]);
+    });
+  });
+
+  describe("relationships", () => {
+    it.skip("allow simple joins", async () => {
+      database.insert("tasks", { item: "mop floors", assigned_to: "person-2" });
+      database.insert("people", { id: "person-1", name: "Mike" });
+      database.insert("people", { id: "person-2", name: "John" });
+      database.addRelationshipResolver("tasks", "people", (row, target) => {
+        return target.filter((r) => r.id === row.assigned_to);
+      });
+
+      const d = (
+        await postgrest.from("tasks").select("item, assignee:people(name)")
+      ).data;
+      expect(d).toEqual([{ item: "mop floors", assignee: { name: "John" } }]);
     });
   });
 });
