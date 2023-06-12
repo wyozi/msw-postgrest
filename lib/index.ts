@@ -40,6 +40,16 @@ export function mswPostgrest(
         return selectColumns(database, select, table as string, r);
       });
 
+      if (req.headers.get("accept") === "application/vnd.pgrst.object+json") {
+        if (rows.length !== 1) {
+          return res(
+            ctx.json({ message: "returned rows is not one" }), // TODO proper postgest error message
+            ctx.status(400)
+          );
+        }
+        return res(ctx.json(rows[0]));
+      }
+
       return res(ctx.json(rows));
     }),
     rest.patch(`${postgrestUrl}/:table`, async (req, res, ctx) => {

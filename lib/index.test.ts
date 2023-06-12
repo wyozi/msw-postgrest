@@ -27,6 +27,52 @@ describe("msw-postgrest", () => {
     database.clear();
   });
 
+  describe("returns", () => {
+    describe("single", () => {
+      it("returns if single result", async () => {
+        database.insert("tasks", { item: "empty fridge" });
+
+        expect(
+          (await postgrest.from("tasks").select("*").single()).data
+        ).toEqual({ item: "empty fridge" });
+      });
+      it("errors if non-single result", async () => {
+        database.insert("tasks", { item: "empty fridge" });
+        database.insert("tasks", { item: "fill fridge" });
+
+        expect(
+          (await postgrest.from("tasks").select("*").single()).error
+        ).toEqual({ message: "returned rows is not one" });
+      });
+    });
+    describe("maybeSingle", () => {
+      it("returns if no results", async () => {
+        expect(
+          (await postgrest.from("tasks").select("*").maybeSingle()).data
+        ).toEqual(null);
+      });
+      it("returns if single result", async () => {
+        database.insert("tasks", { item: "empty fridge" });
+
+        expect(
+          (await postgrest.from("tasks").select("*").maybeSingle()).data
+        ).toEqual({ item: "empty fridge" });
+      });
+      it("errors if non-single result", async () => {
+        database.insert("tasks", { item: "empty fridge" });
+        database.insert("tasks", { item: "fill fridge" });
+
+        expect(
+          (await postgrest.from("tasks").select("*").maybeSingle()).error
+        ).toEqual(
+          expect.objectContaining({
+            message: expect.stringContaining("multiple (or no) rows returned"),
+          })
+        );
+      });
+    });
+  });
+
   describe("selections", () => {
     it("simple select", async () => {
       database.insert("tasks", { item: "empty fridge" });
