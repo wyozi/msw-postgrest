@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.0.7
+
+### Patch Changes
+
+- aad3ab5: fix relationships on empty tables
+
 ## 0.0.6
 
 ### Patch Changes
