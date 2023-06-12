@@ -1,0 +1,26 @@
+{
+  "name": "msw-postgrest",
+  "version": "0.0.1",
+  "description": "",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup lib/index.ts --format cjs --dts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "msw": "^1.0.0"
+  },
+  "devDependencies": {
+    "@supabase/postgrest-js": "^1.7.0",
+    "@swc/core": "^1.3.62",
+    "msw": "^1.2.1",
+    "tsup": "^6.7.0",
+    "typescript": "^5.1.3",
+    "vitest": "^0.31.1"
+  }
+}
