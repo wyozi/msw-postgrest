@@ -201,5 +201,17 @@ describe("msw-postgrest", () => {
         },
       ]);
     });
+
+    it("works with empty tables", async () => {
+      database.insert("tasks", { item: "mop floors", assigned_to: "person-2" });
+      database.addRelationshipResolver("tasks", "people", (row, target) => {
+        return target.find((r) => r.id === row.assigned_to) ?? null;
+      });
+
+      const d = (
+        await postgrest.from("tasks").select("item, assignee:people(name)")
+      ).data;
+      expect(d).toEqual([{ item: "mop floors", assignee: null }]);
+    });
   });
 });

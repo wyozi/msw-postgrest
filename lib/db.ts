@@ -6,7 +6,7 @@ export class MSWPostgrestDatabase {
   private resolvers: Array<{
     from: string;
     to: string;
-    resolver: (fromRow: Row, target: Table) => Row | Row[];
+    resolver: (fromRow: Row, target: Table) => Row | Row[] | null;
   }> = [];
 
   /**
@@ -29,7 +29,7 @@ export class MSWPostgrestDatabase {
   addRelationshipResolver(
     fromTable: string,
     toTable: string,
-    resolver: (fromRow: Row, target: Table) => Row | Row[]
+    resolver: (fromRow: Row, target: Table) => Row | Row[] | null
   ) {
     this.resolvers.push({ from: fromTable, to: toTable, resolver });
   }
@@ -38,6 +38,6 @@ export class MSWPostgrestDatabase {
     const resolver = this.resolvers.find(
       (r) => r.from === fromTable && r.to === toTable
     )?.resolver;
-    return resolver?.(fromRow, this.data[toTable]);
+    return resolver?.(fromRow, this.data[toTable] || []);
   }
 }
