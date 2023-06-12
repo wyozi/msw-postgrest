@@ -25,13 +25,22 @@ export function mswPostgrest(
       let rows = database.select(table as string);
 
       const colsAndFilters = Array.from(req.url.searchParams.entries())
-        .filter(([col]) => col !== "select" && col !== "order")
+        .filter(
+          ([col]) => col !== "select" && col !== "order" && col !== "limit"
+        )
         .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
       rows = rows.filter((r) => {
         return colsAndFilters.every(([col, filter]) =>
           filter(extractKey(r, col))
         );
       });
+
+      if (req.url.searchParams.has("limit")) {
+        rows = rows.slice(
+          0,
+          parseInt(req.url.searchParams.get("limit") as string, 10)
+        );
+      }
 
       const select = req.url.searchParams.has("select")
         ? parseSelectString(req.url.searchParams.get("select") as string)
@@ -60,13 +69,22 @@ export function mswPostgrest(
       let rows = database.select(table as string);
 
       const colsAndFilters = Array.from(req.url.searchParams.entries())
-        .filter(([col]) => col !== "select" && col !== "order")
+        .filter(
+          ([col]) => col !== "select" && col !== "order" && col !== "limit"
+        )
         .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
       rows = rows.filter((r) => {
         return colsAndFilters.every(([col, filter]) =>
           filter(extractKey(r, col))
         );
       });
+
+      if (req.url.searchParams.has("limit")) {
+        rows = rows.slice(
+          0,
+          parseInt(req.url.searchParams.get("limit") as string, 10)
+        );
+      }
 
       const select = req.url.searchParams.has("select")
         ? parseSelectString(req.url.searchParams.get("select") as string)

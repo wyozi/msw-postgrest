@@ -91,6 +91,14 @@ describe("msw-postgrest", () => {
         (await postgrest.from("tasks").select("*").order("item")).data
       ).toEqual([{ item: "empty fridge" }, { item: "go shopping" }]);
     });
+    it("select with limit", async () => {
+      database.insert("tasks", { item: "empty fridge" });
+      database.insert("tasks", { item: "go shopping" });
+
+      expect((await postgrest.from("tasks").select("*").limit(1)).data).toEqual(
+        [{ item: "empty fridge" }]
+      );
+    });
     it("selective select", async () => {
       database.insert("tasks", {
         item: "empty fridge",
