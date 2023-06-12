@@ -25,7 +25,7 @@ export function mswPostgrest(
       let rows = database.select(table as string);
 
       const colsAndFilters = Array.from(req.url.searchParams.entries())
-        .filter(([col]) => col !== "select")
+        .filter(([col]) => col !== "select" && col !== "order")
         .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
       rows = rows.filter((r) => {
         return colsAndFilters.every(([col, filter]) =>
@@ -60,7 +60,7 @@ export function mswPostgrest(
       let rows = database.select(table as string);
 
       const colsAndFilters = Array.from(req.url.searchParams.entries())
-        .filter(([col]) => col !== "select")
+        .filter(([col]) => col !== "select" && col !== "order")
         .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
       rows = rows.filter((r) => {
         return colsAndFilters.every(([col, filter]) =>

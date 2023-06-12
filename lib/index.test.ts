@@ -83,6 +83,14 @@ describe("msw-postgrest", () => {
         { item: "go shopping" },
       ]);
     });
+    it("ordered select", async () => {
+      database.insert("tasks", { item: "empty fridge" });
+      database.insert("tasks", { item: "go shopping" });
+
+      expect(
+        (await postgrest.from("tasks").select("*").order("item")).data
+      ).toEqual([{ item: "empty fridge" }, { item: "go shopping" }]);
+    });
     it("selective select", async () => {
       database.insert("tasks", {
         item: "empty fridge",
