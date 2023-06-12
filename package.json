@@ -1,6 +1,6 @@
 {
   "name": "msw-postgrest",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsup lib/index.ts --format cjs --dts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "publish-packages": "turbo run build test && changeset version && changeset publish"
   },
   "peerDependencies": {
     "msw": "^1.0.0"

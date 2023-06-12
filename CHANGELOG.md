@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.0.4
+
+### Patch Changes
+
+- fix build
+
 ## 0.0.3
 
 ### Patch Changes
