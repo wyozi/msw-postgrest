@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.0.8
+
+### Patch Changes
+
+- bf6983f: very basic handling of existence of order property
+
 ## 0.0.7
 
 ### Patch Changes
