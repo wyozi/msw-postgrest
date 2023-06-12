@@ -1,6 +1,6 @@
 # msw-postgrest
 
-Easy mocking of Postgrest/Supabase servers for Mock Service Worker (MSW)
+Mock Postgrest/Supabase database server with Mock Service Worker (MSW)
 
 **Usage:**
 

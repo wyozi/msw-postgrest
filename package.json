@@ -2,6 +2,7 @@
   "name": "msw-postgrest",
   "version": "0.0.2",
   "description": "",
+  "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
