@@ -1,4 +1,4 @@
-type Column =
+export type Column =
   | { star: true }
   | {
       column: string;

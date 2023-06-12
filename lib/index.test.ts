@@ -112,18 +112,48 @@ describe("msw-postgrest", () => {
   });
 
   describe("relationships", () => {
-    it.skip("allow simple joins", async () => {
+    it("allow simple joins", async () => {
       database.insert("tasks", { item: "mop floors", assigned_to: "person-2" });
       database.insert("people", { id: "person-1", name: "Mike" });
       database.insert("people", { id: "person-2", name: "John" });
       database.addRelationshipResolver("tasks", "people", (row, target) => {
-        return target.filter((r) => r.id === row.assigned_to);
+        return target.find((r) => r.id === row.assigned_to)!;
       });
 
       const d = (
         await postgrest.from("tasks").select("item, assignee:people(name)")
       ).data;
       expect(d).toEqual([{ item: "mop floors", assignee: { name: "John" } }]);
+    });
+
+    it("allow nested joins", async () => {
+      database.insert("tasks", { item: "mop floors", assigned_to: "person-1" });
+      database.insert("people", {
+        id: "person-1",
+        name: "Mike",
+        group_id: "grp-1",
+      });
+      database.insert("people", { id: "person-2", name: "John" });
+      database.insert("groups", { id: "grp-1", name: "Cleaning Crew" });
+
+      database.addRelationshipResolver("tasks", "people", (row, target) => {
+        return target.find((r) => r.id === row.assigned_to)!;
+      });
+      database.addRelationshipResolver("people", "groups", (row, target) => {
+        return target.find((r) => r.id === row.group_id)!;
+      });
+
+      const d = (
+        await postgrest
+          .from("tasks")
+          .select("item, assignee:people(name, group:groups(name))")
+      ).data;
+      expect(d).toEqual([
+        {
+          item: "mop floors",
+          assignee: { name: "Mike", group: { name: "Cleaning Crew" } },
+        },
+      ]);
     });
   });
 });
