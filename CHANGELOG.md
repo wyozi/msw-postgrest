@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.0.5
+
+### Patch Changes
+
+- c3acda0: add relationship handler
+
 ## 0.0.4
 
 ### Patch Changes
