@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.0.9
+
+### Patch Changes
+
+- 3c95f36: basic limit support
+
 ## 0.0.8
 
 ### Patch Changes
