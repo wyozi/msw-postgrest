@@ -9,6 +9,12 @@ export function mswPostgrest(
   database: MSWPostgrestDatabase;
   workers: Array<RestHandler<MockedRequest<DefaultBodyType>>>;
 } {
+  if (postgrestUrl.endsWith("/")) {
+    throw new Error(
+      "postgrestUrl should not end in a slash (we add it manually)"
+    );
+  }
+
   const database = new MSWPostgrestDatabase();
   const workers = [
     rest.get(`${postgrestUrl}/:table`, async (req, res, ctx) => {
