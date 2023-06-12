@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.0.6
+
+### Patch Changes
+
+- 351085c: implement single and maybeSingle for get
+
 ## 0.0.5
 
 ### Patch Changes
