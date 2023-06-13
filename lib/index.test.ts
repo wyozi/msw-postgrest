@@ -13,7 +13,10 @@ import { mswPostgrest } from ".";
 
 const POSTGREST_URL = "http://localhost";
 
-const { database, workers } = mswPostgrest({ postgrestUrl: POSTGREST_URL });
+const { database, workers } = mswPostgrest({
+  postgrestUrl: POSTGREST_URL,
+  schema: { blobs: { id: { type: "uuid", autoGenerate: true } } },
+});
 const server = setupServer(...workers);
 
 // Ideally you'd move this to a setupTests file
@@ -25,6 +28,21 @@ describe("msw-postgrest", () => {
   const postgrest = new PostgrestClient(POSTGREST_URL);
   beforeEach(() => {
     database.clear();
+  });
+
+  describe("schema", () => {
+    describe("autogenerate", () => {
+      it("autogenerates uuid", () => {
+        database.insert("blobs", {});
+        expect(database.select("blobs")).toEqual([
+          {
+            id: expect.stringMatching(
+              /^[0-9A-F]{8}-[0-9A-F]{4}-[4][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i
+            ),
+          },
+        ]);
+      });
+    });
   });
 
   describe("returns", () => {

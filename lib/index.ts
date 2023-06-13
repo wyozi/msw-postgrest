@@ -1,26 +1,12 @@
 import { DefaultBodyType, MockedRequest, RestHandler, rest } from "msw";
-import { MSWPostgrestDatabase, Row } from "./db";
+import { MSWPostgrestDatabase, Row, Schema } from "./db";
 import { extractKey, parseFilter } from "./filters";
 import { Column, parseSelectString } from "./selection";
 
-function parseSearchParams(usp: URLSearchParams) {
-  const colsAndFilters = Array.from(usp.entries())
-    .filter(([col]) => col !== "select" && col !== "order" && col !== "limit")
-    .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
-
-  return {
-    filters: colsAndFilters,
-    select: usp.has("select")
-      ? parseSelectString(usp.get("select") as string)
-      : null,
-    limit: usp.has("limit") ? parseInt(usp.get("limit") as string, 10) : null,
-  };
-}
-
 export function mswPostgrest(
-  { postgrestUrl } = {
+  { postgrestUrl, schema } = {
     postgrestUrl: "http://localhost:54321",
-  }
+  } as { postgrestUrl: string; schema?: Schema }
 ): {
   database: MSWPostgrestDatabase;
   workers: Array<RestHandler<MockedRequest<DefaultBodyType>>>;
@@ -31,7 +17,7 @@ export function mswPostgrest(
     );
   }
 
-  const database = new MSWPostgrestDatabase();
+  const database = new MSWPostgrestDatabase(schema);
   const workers = [
     rest.get(`${postgrestUrl}/:table`, async (req, res, ctx) => {
       const table = req.params.table;
@@ -154,7 +140,21 @@ export function mswPostgrest(
   return { database, workers };
 }
 
-export function selectColumns(
+function parseSearchParams(usp: URLSearchParams) {
+  const colsAndFilters = Array.from(usp.entries())
+    .filter(([col]) => col !== "select" && col !== "order" && col !== "limit")
+    .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
+
+  return {
+    filters: colsAndFilters,
+    select: usp.has("select")
+      ? parseSelectString(usp.get("select") as string)
+      : null,
+    limit: usp.has("limit") ? parseInt(usp.get("limit") as string, 10) : null,
+  };
+}
+
+function selectColumns(
   db: MSWPostgrestDatabase,
   cols: Column[],
   table: string,
