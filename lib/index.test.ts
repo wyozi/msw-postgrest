@@ -133,7 +133,7 @@ describe("msw-postgrest", () => {
             .eq("group_id", "grp")
             .eq("meta->>tagColor", "red")
         ).data
-      ).toEqual([{ item: "sell curtains", meta: { tagColor: "red" } }]);
+      ).toEqual([{ item: "sell curtains", tagColor: "red" }]);
     });
   });
 
@@ -154,9 +154,12 @@ describe("msw-postgrest", () => {
     it("insert item and return values", async () => {
       const res = await postgrest
         .from("tasks")
-        .insert({ item: "do chores" })
-        .select("*");
-      expect(res.data).toEqual([{ item: "do chores" }]);
+        .insert({
+          item: "do chores",
+          meta: { location: "Finland", temperature: 23 },
+        })
+        .select("item, meta->location");
+      expect(res.data).toEqual([{ item: "do chores", location: "Finland" }]);
     });
   });
 

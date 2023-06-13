@@ -3,6 +3,20 @@ import { MSWPostgrestDatabase, Row } from "./db";
 import { extractKey, parseFilter } from "./filters";
 import { Column, parseSelectString } from "./selection";
 
+function parseSearchParams(usp: URLSearchParams) {
+  const colsAndFilters = Array.from(usp.entries())
+    .filter(([col]) => col !== "select" && col !== "order" && col !== "limit")
+    .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
+
+  return {
+    filters: colsAndFilters,
+    select: usp.has("select")
+      ? parseSelectString(usp.get("select") as string)
+      : null,
+    limit: usp.has("limit") ? parseInt(usp.get("limit") as string, 10) : null,
+  };
+}
+
 export function mswPostgrest(
   { postgrestUrl } = {
     postgrestUrl: "http://localhost:54321",
@@ -21,33 +35,27 @@ export function mswPostgrest(
   const workers = [
     rest.get(`${postgrestUrl}/:table`, async (req, res, ctx) => {
       const table = req.params.table;
+      const params = parseSearchParams(req.url.searchParams);
 
       let rows = database.select(table as string);
-
-      const colsAndFilters = Array.from(req.url.searchParams.entries())
-        .filter(
-          ([col]) => col !== "select" && col !== "order" && col !== "limit"
-        )
-        .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
       rows = rows.filter((r) => {
-        return colsAndFilters.every(([col, filter]) =>
+        return params.filters.every(([col, filter]) =>
           filter(extractKey(r, col))
         );
       });
 
-      if (req.url.searchParams.has("limit")) {
-        rows = rows.slice(
-          0,
-          parseInt(req.url.searchParams.get("limit") as string, 10)
-        );
+      if (params.limit !== null) {
+        rows = rows.slice(0, params.limit);
       }
 
-      const select = req.url.searchParams.has("select")
-        ? parseSelectString(req.url.searchParams.get("select") as string)
-        : [{ star: true } as const];
-      rows = rows.map((r) => {
-        return selectColumns(database, select, table as string, r);
-      });
+      if (params.select) {
+        const sel = params.select;
+        rows = rows.map((r) => {
+          return selectColumns(database, sel, table as string, r);
+        });
+      } else {
+        rows = [];
+      }
 
       if (req.headers.get("accept") === "application/vnd.pgrst.object+json") {
         if (rows.length !== 1) {
@@ -63,59 +71,84 @@ export function mswPostgrest(
     }),
     rest.patch(`${postgrestUrl}/:table`, async (req, res, ctx) => {
       const table = req.params.table;
+      const params = parseSearchParams(req.url.searchParams);
 
       const updateData = await req.json();
 
       let rows = database.select(table as string);
-
-      const colsAndFilters = Array.from(req.url.searchParams.entries())
-        .filter(
-          ([col]) => col !== "select" && col !== "order" && col !== "limit"
-        )
-        .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
       rows = rows.filter((r) => {
-        return colsAndFilters.every(([col, filter]) =>
+        return params.filters.every(([col, filter]) =>
           filter(extractKey(r, col))
         );
       });
 
-      if (req.url.searchParams.has("limit")) {
-        rows = rows.slice(
-          0,
-          parseInt(req.url.searchParams.get("limit") as string, 10)
-        );
+      if (params.limit !== null) {
+        rows = rows.slice(0, params.limit);
       }
 
-      const select = req.url.searchParams.has("select")
-        ? parseSelectString(req.url.searchParams.get("select") as string)
-        : [{ star: true } as const];
-      rows = rows.map((r) => {
+      for (const row of rows) {
         for (const [k, v] of Object.entries(updateData)) {
-          r[k] = v; // todo do this immutably
+          row[k] = v; // todo do this immutably
         }
+      }
 
-        return selectColumns(database, select, table as string, r);
-      });
+      if (params.select) {
+        const sel = params.select;
+        rows = rows.map((r) => {
+          return selectColumns(database, sel, table as string, r);
+        });
+      } else {
+        rows = [];
+      }
+
+      if (req.headers.get("accept") === "application/vnd.pgrst.object+json") {
+        if (rows.length !== 1) {
+          return res(
+            ctx.json({ message: "returned rows is not one" }), // TODO proper postgest error message
+            ctx.status(400)
+          );
+        }
+        return res(ctx.json(rows[0]));
+      }
 
       return res(ctx.json(rows));
     }),
     rest.post(`${postgrestUrl}/:table`, async (req, res, ctx) => {
       const table = req.params.table;
 
-      let rows = await req.json();
+      let rows: any[] = await req.json();
       rows = Array.isArray(rows) ? rows : [rows];
 
       for (const row of rows) {
         database.insert(table as string, row);
       }
 
-      const searchParams = req.url.searchParams;
-      if (searchParams.has("select")) {
-        const select = searchParams.get("select");
-        return res(ctx.json(rows));
+      const params = parseSearchParams(req.url.searchParams);
+
+      if (params.limit !== null) {
+        rows = rows.slice(0, params.limit);
       }
 
-      return res(ctx.json(null));
+      if (params.select) {
+        const sel = params.select;
+        rows = rows.map((r) => {
+          return selectColumns(database, sel, table as string, r);
+        });
+      } else {
+        rows = [];
+      }
+
+      if (req.headers.get("accept") === "application/vnd.pgrst.object+json") {
+        if (rows.length !== 1) {
+          return res(
+            ctx.json({ message: "returned rows is not one" }), // TODO proper postgest error message
+            ctx.status(400)
+          );
+        }
+        return res(ctx.json(rows[0]));
+      }
+
+      return res(ctx.json(rows));
     }),
   ];
   return { database, workers };
@@ -132,7 +165,12 @@ export function selectColumns(
     if ("star" in col) {
       Object.assign(row, orig);
     } else if ("column" in col) {
-      (row as any)[col.alias || col.column] = orig[col.column];
+      if ("json" in col) {
+        (row as any)[col.alias || col.json!.path] =
+          orig[col.column][col.json!.path];
+      } else {
+        (row as any)[col.alias || col.column] = orig[col.column];
+      }
     } else if ("relation" in col) {
       const resolved = db.resolveRelationship(table, col.relation, orig);
 
