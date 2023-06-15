@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSelectString } from "./selection";
+import { ParseError, parseSelectString } from "./selection";
 
 describe("parseSelectString", () => {
   it("handles simple cases", () => {
@@ -59,5 +59,13 @@ describe("parseSelectString", () => {
         cols: [{ column: "company_id" }],
       },
     ]);
+  });
+
+  describe("error cases", () => {
+    it("handles mismatches parens", () => {
+      expect(() => parseSelectString("foo(name)),baz")).toThrowError(
+        ParseError
+      );
+    });
   });
 });

@@ -40,14 +40,19 @@ export function parseSelectString(select: string): Column[] {
    * Parse a singular tokenstream (i.e. contents inside parens).
    * New left parenthesis will start a new stream
    */
-  function* parse(): Iterable<Column> {
+  function* parse(level = 0): Iterable<Column> {
     while (true) {
       let value = tokenIterator.next();
       if (tokenIterator.done) {
         break;
       }
+
+      // break out of parse context
       if (value === ")") {
-        break;
+        if (level === 0) {
+          throw new ParseError("too many right parenthesis found");
+        }
+        return;
       }
 
       if (value === "*") {
@@ -81,7 +86,7 @@ export function parseSelectString(select: string): Column[] {
           yield {
             relation: colName,
             ...(alias && { alias }),
-            cols: Array.from(parse()),
+            cols: Array.from(parse(level + 1)),
           };
 
           columnDecorator = tokenIterator.next();
@@ -99,14 +104,27 @@ export function parseSelectString(select: string): Column[] {
           yield { column: colName, ...(alias && { alias }) };
         }
 
+        // break out of parse context
         if (columnDecorator === ")") {
-          break;
+          if (level === 0) {
+            throw new ParseError("too many right parenthesis found");
+          }
+          return;
         }
       }
     }
   }
 
   return Array.from(parse());
+}
+
+/**
+ * Something went wrong with parsing select string
+ */
+export class ParseError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
 }
 
 function tokenize(select: string) {
@@ -142,6 +160,11 @@ function createTokenIterator(tokens: string[]) {
       return value;
     },
     /**
+     * Returns current context/parser state for
+     * nice error display purposes
+     */
+    context() {},
+    /**
      * get next token and expect it to match given token
      */
     expect(expected: string, opts?: { acceptEOF?: boolean }) {
@@ -150,7 +173,7 @@ function createTokenIterator(tokens: string[]) {
         return;
       }
       if (v !== expected) {
-        throw new Error(`expected ${expected}, got ${v}`);
+        throw new ParseError(`expected ${expected}, got ${v}`);
       }
     },
   };
