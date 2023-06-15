@@ -1,10 +1,23 @@
 export type Column =
+  /**
+   * Star ('*')
+   */
   | { star: true }
+  /**
+   * A column (or a jsonb path) reference
+   *
+   * For example: "name" or "jsonCol->>jsonObject"
+   */
   | {
       column: string;
       alias?: string;
       json?: { path: string; type: "json" | "text" };
     }
+  /**
+   * A table reference.
+   *
+   * For example: "users(id, name)"
+   */
   | { relation: string; cols: Column[]; alias?: string };
 
 /**
@@ -15,15 +28,18 @@ export type Column =
  * - id, name, date_of_birth
  * - id, obj->>supervisor, obj->>employerName
  * - name, industry:industries(name, companies(name))
+ *
+ * @param select select string to parse
+ * @returns array of columns
  */
 export function parseSelectString(select: string): Column[] {
   const tokens = tokenize(select);
-  const tokenIterator = tokens[Symbol.iterator]();
+  const tokenIterator = createTokenIterator(tokens);
 
-  function* parse(): any {
+  function* parse(): Iterable<Column> {
     while (true) {
-      const { value, done } = tokenIterator.next();
-      if (done) {
+      let value = tokenIterator.next();
+      if (tokenIterator.done) {
         break;
       }
       if (value === ")") {
@@ -31,55 +47,54 @@ export function parseSelectString(select: string): Column[] {
       }
 
       if (value === "*") {
-        yield { star: true } as const;
-        tokenIterator.next(); // TODO check if comma
+        yield { star: true };
+        tokenIterator.expect(",", { acceptEOF: true });
       } else {
-        let colName = value;
-        let alias;
+        // this looks like a named column
 
-        let { value: nextValue, done: nextDone } = tokenIterator.next();
-        if (nextValue === ":") {
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
+        let colName = value;
+        let alias = null;
+
+        let columnDecorator = tokenIterator.next();
+        if (columnDecorator === ":") {
+          // aliased column; set alias and read the actual column name
 
           alias = colName;
-          colName = nextValue;
+          colName = tokenIterator.next();
 
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
+          columnDecorator = tokenIterator.next();
         }
 
-        if (nextValue === "!") {
-          // skip over !fkey or !inner
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
-        }
-        if (nextValue === "!") {
-          // skip over !fkey or !inner
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
+        // skip over hints; not processed at the moment
+        while (columnDecorator === "!") {
+          tokenIterator.next(); // hint name
+
+          columnDecorator = tokenIterator.next();
         }
 
-        if (nextValue === "(") {
+        if (columnDecorator === "(") {
           yield {
             relation: colName,
             ...(alias && { alias }),
             cols: Array.from(parse()),
           };
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
-        } else if (nextValue === "->" || nextValue === "->>") {
-          const returnJson = nextValue === "->";
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
+
+          columnDecorator = tokenIterator.next();
+        } else if (columnDecorator === "->" || columnDecorator === "->>") {
+          const returnJson = columnDecorator === "->";
+          columnDecorator = tokenIterator.next();
           yield {
             column: colName,
             ...(alias && { alias }),
-            json: { path: nextValue, type: returnJson ? "json" : "text" },
+            json: { path: columnDecorator, type: returnJson ? "json" : "text" },
           };
 
-          ({ value: nextValue, done: nextDone } = tokenIterator.next());
+          columnDecorator = tokenIterator.next();
         } else {
           yield { column: colName, ...(alias && { alias }) };
         }
 
-        if (nextValue === ")") {
+        if (columnDecorator === ")") {
           break;
         }
       }
@@ -100,4 +115,38 @@ function tokenize(select: string) {
   }
 
   return tokens;
+}
+
+function createTokenIterator(tokens: string[]) {
+  const it = tokens[Symbol.iterator]();
+
+  let iteratorDone = false;
+  return {
+    /**
+     * Whether iterator is done
+     */
+    get done() {
+      return iteratorDone;
+    },
+    /**
+     * @returns next token in token stream
+     */
+    next(): string {
+      const { value, done } = it.next();
+      iteratorDone = done || false;
+      return value;
+    },
+    /**
+     * get next token and expect it to match given token
+     */
+    expect(expected: string, opts?: { acceptEOF?: boolean }) {
+      const v = this.next();
+      if (this.done && opts?.acceptEOF) {
+        return;
+      }
+      if (v !== expected) {
+        throw new Error(`expected ${expected}, got ${v}`);
+      }
+    },
+  };
 }
