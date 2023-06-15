@@ -36,6 +36,10 @@ export function parseSelectString(select: string): Column[] {
   const tokens = tokenize(select);
   const tokenIterator = createTokenIterator(tokens);
 
+  /**
+   * Parse a singular tokenstream (i.e. contents inside parens).
+   * New left parenthesis will start a new stream
+   */
   function* parse(): Iterable<Column> {
     while (true) {
       let value = tokenIterator.next();
@@ -56,9 +60,9 @@ export function parseSelectString(select: string): Column[] {
         let alias = null;
 
         let columnDecorator = tokenIterator.next();
-        if (columnDecorator === ":") {
-          // aliased column; set alias and read the actual column name
 
+        // aliased column; set alias and read the actual column name
+        if (columnDecorator === ":") {
           alias = colName;
           colName = tokenIterator.next();
 
@@ -72,6 +76,7 @@ export function parseSelectString(select: string): Column[] {
           columnDecorator = tokenIterator.next();
         }
 
+        // new parsing context (= parenthesis)
         if (columnDecorator === "(") {
           yield {
             relation: colName,
