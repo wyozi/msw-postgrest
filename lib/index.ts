@@ -69,7 +69,9 @@ export function mswPostgrest<
         return res(ctx.json(match.replyFun()));
       } else {
         return res(
-          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.json({
+            message: `no msw-postgrest match found for GET ${table}`,
+          }),
           ctx.status(400)
         );
       }
@@ -85,7 +87,9 @@ export function mswPostgrest<
         return res(ctx.json(match.replyFun()));
       } else {
         return res(
-          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.json({
+            message: `no msw-postgrest match found for PATCH ${table}`,
+          }),
           ctx.status(400)
         );
       }
@@ -103,7 +107,9 @@ export function mswPostgrest<
         return res(ctx.json(match.replyFun()));
       } else {
         return res(
-          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.json({
+            message: `no msw-postgrest match found for POST ${table}`,
+          }),
           ctx.status(400)
         );
       }
@@ -119,7 +125,9 @@ export function mswPostgrest<
         return res(ctx.json(match.replyFun()));
       } else {
         return res(
-          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.json({
+            message: `no msw-postgrest match found for DELETE ${table}`,
+          }),
           ctx.status(400)
         );
       }

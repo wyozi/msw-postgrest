@@ -47,7 +47,7 @@ export class PostgrestMock<
   }
 
   reply(
-    fun: () => ResultOne[]
+    fun: () => ResultOne | ResultOne[]
   ): PostgrestMock<Schema, Relation, Relationships, ResultOne> {
     this.replyFun = fun;
     return this as any;

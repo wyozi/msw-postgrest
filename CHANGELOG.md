@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.1.2
+
+### Patch Changes
+
+- improve types and error messages
+
 ## 0.1.1
 
 ### Patch Changes
