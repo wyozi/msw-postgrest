@@ -1,189 +1,112 @@
+import type { GenericSchema } from "@supabase/postgrest-js/dist/module/types";
 import { DefaultBodyType, MockedRequest, RestHandler, rest } from "msw";
-import { MSWPostgrestDatabase, Row, Schema } from "./db";
-import { extractKey, parseFilter } from "./filters";
-import { Column, parseSelectString } from "./selection";
+import { PostgrestMock } from "./mock";
 
-export function mswPostgrest(
-  { postgrestUrl, schema } = {
-    postgrestUrl: "http://localhost:54321",
-  } as { postgrestUrl: string; schema?: Schema }
-): {
-  database: MSWPostgrestDatabase;
-  workers: Array<RestHandler<MockedRequest<DefaultBodyType>>>;
-} {
-  if (postgrestUrl.endsWith("/")) {
-    throw new Error(
-      "postgrestUrl should not end in a slash (we add it manually)"
-    );
+class MswPostgrestClient<Schema extends GenericSchema = any> {
+  private mockQueue: PostgrestMock<any, any>[] = [];
+
+  from<
+    TableName extends string & keyof Schema["Tables"],
+    Table extends Schema["Tables"][TableName]
+  >(relation: TableName): PostgrestMock<Schema, Table>;
+  from<
+    ViewName extends string & keyof Schema["Views"],
+    View extends Schema["Views"][ViewName]
+  >(relation: ViewName): PostgrestMock<Schema, View>;
+  from(relation: string): PostgrestMock<Schema, any>;
+  /**
+   * Perform a query on a table or a view.
+   *
+   * @param relation - The table or view name to query
+   */
+  from(relation: string): PostgrestMock<Schema, any> {
+    const mock = new PostgrestMock<Schema, any>(relation);
+    this.mockQueue.push(mock);
+    return mock;
   }
 
-  const database = new MSWPostgrestDatabase(schema);
+  popFirstMatching(
+    matcher: (mock: PostgrestMock<Schema, any>) => boolean
+  ): PostgrestMock<Schema, any> | null {
+    const i = this.mockQueue.findIndex(matcher);
+    if (i !== -1) {
+      return this.mockQueue.splice(i, 1)[0];
+    } else {
+      return null;
+    }
+  }
+}
+
+export function mswPostgrest<
+  Database = any,
+  SchemaName extends string & keyof Database = "public" extends keyof Database
+    ? "public"
+    : string & keyof Database,
+  Schema extends GenericSchema = Database[SchemaName] extends GenericSchema
+    ? Database[SchemaName]
+    : any
+>(
+  { postgrestUrl, schema } = {
+    postgrestUrl: "http://localhost:54321",
+  } as { postgrestUrl: string; schema?: SchemaName }
+): {
+  mock: MswPostgrestClient<Schema>;
+  workers: Array<RestHandler<MockedRequest<DefaultBodyType>>>;
+} {
+  // remove final slashes if provided
+  postgrestUrl = postgrestUrl.replace(/\/+$/, "");
+
+  const mock = new MswPostgrestClient<Schema>();
+
   const workers = [
     rest.get(`${postgrestUrl}/:table`, async (req, res, ctx) => {
       const table = req.params.table;
-      const params = parseSearchParams(req.url.searchParams);
 
-      let rows = database.select(table as string);
-      rows = rows.filter((r) => {
-        return params.filters.every(([col, filter]) =>
-          filter(extractKey(r, col))
-        );
-      });
-
-      if (params.limit !== null) {
-        rows = rows.slice(0, params.limit);
-      }
-
-      if (params.select) {
-        const sel = params.select;
-        rows = rows.map((r) => {
-          return selectColumns(database, sel, table as string, r);
-        });
+      const match = mock.popFirstMatching(
+        (m) => m.relation === table && m.operation === "select"
+      );
+      if (match) {
+        return res(ctx.json(match.replyFun()));
       } else {
-        rows = [];
+        return res(
+          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.status(400)
+        );
       }
-
-      if (req.headers.get("accept") === "application/vnd.pgrst.object+json") {
-        if (rows.length !== 1) {
-          return res(
-            ctx.json({ message: "returned rows is not one" }), // TODO proper postgest error message
-            ctx.status(400)
-          );
-        }
-        return res(ctx.json(rows[0]));
-      }
-
-      return res(ctx.json(rows));
     }),
     rest.patch(`${postgrestUrl}/:table`, async (req, res, ctx) => {
       const table = req.params.table;
-      const params = parseSearchParams(req.url.searchParams);
 
-      const updateData = await req.json();
-
-      let rows = database.select(table as string);
-      rows = rows.filter((r) => {
-        return params.filters.every(([col, filter]) =>
-          filter(extractKey(r, col))
-        );
-      });
-
-      if (params.limit !== null) {
-        rows = rows.slice(0, params.limit);
-      }
-
-      for (const row of rows) {
-        for (const [k, v] of Object.entries(updateData)) {
-          row[k] = v; // todo do this immutably
-        }
-      }
-
-      if (params.select) {
-        const sel = params.select;
-        rows = rows.map((r) => {
-          return selectColumns(database, sel, table as string, r);
-        });
+      const match = mock.popFirstMatching(
+        (m) => m.relation === table && m.operation === "update"
+      );
+      if (match) {
+        match.body = await req.json();
+        return res(ctx.json(match.replyFun()));
       } else {
-        rows = [];
+        return res(
+          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.status(400)
+        );
       }
-
-      if (req.headers.get("accept") === "application/vnd.pgrst.object+json") {
-        if (rows.length !== 1) {
-          return res(
-            ctx.json({ message: "returned rows is not one" }), // TODO proper postgest error message
-            ctx.status(400)
-          );
-        }
-        return res(ctx.json(rows[0]));
-      }
-
-      return res(ctx.json(rows));
     }),
     rest.post(`${postgrestUrl}/:table`, async (req, res, ctx) => {
       const table = req.params.table;
 
-      let rows: any[] = await req.json();
-      rows = Array.isArray(rows) ? rows : [rows];
-
-      for (const row of rows) {
-        database.insert(table as string, row);
-      }
-
-      const params = parseSearchParams(req.url.searchParams);
-
-      if (params.limit !== null) {
-        rows = rows.slice(0, params.limit);
-      }
-
-      if (params.select) {
-        const sel = params.select;
-        rows = rows.map((r) => {
-          return selectColumns(database, sel, table as string, r);
-        });
+      const match = mock.popFirstMatching(
+        (m) => m.relation === table && m.operation === "insert"
+      );
+      if (match) {
+        match.body = await req.json();
+        return res(ctx.json(match.replyFun()));
       } else {
-        rows = [];
+        return res(
+          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.status(400)
+        );
       }
-
-      if (req.headers.get("accept") === "application/vnd.pgrst.object+json") {
-        if (rows.length !== 1) {
-          return res(
-            ctx.json({ message: "returned rows is not one" }), // TODO proper postgest error message
-            ctx.status(400)
-          );
-        }
-        return res(ctx.json(rows[0]));
-      }
-
-      return res(ctx.json(rows));
     }),
   ];
-  return { database, workers };
-}
 
-function parseSearchParams(usp: URLSearchParams) {
-  const colsAndFilters = Array.from(usp.entries())
-    .filter(([col]) => col !== "select" && col !== "order" && col !== "limit")
-    .map(([col, fstr]) => [col, parseFilter(fstr)] as const);
-
-  return {
-    filters: colsAndFilters,
-    select: usp.has("select")
-      ? parseSelectString(usp.get("select") as string)
-      : null,
-    limit: usp.has("limit") ? parseInt(usp.get("limit") as string, 10) : null,
-  };
-}
-
-function selectColumns(
-  db: MSWPostgrestDatabase,
-  cols: Column[],
-  table: string,
-  orig: Row
-): Row {
-  const row = {};
-  for (const col of cols) {
-    if ("star" in col) {
-      Object.assign(row, orig);
-    } else if ("column" in col) {
-      if ("json" in col) {
-        (row as any)[col.alias || col.json!.path] =
-          orig[col.column][col.json!.path];
-      } else {
-        (row as any)[col.alias || col.column] = orig[col.column];
-      }
-    } else if ("relation" in col) {
-      const resolved = db.resolveRelationship(table, col.relation, orig);
-
-      let data = null;
-      if (Array.isArray(resolved)) {
-        data = resolved.map((r) =>
-          selectColumns(db, col.cols, col.relation, r)
-        );
-      } else if (resolved) {
-        data = selectColumns(db, col.cols, col.relation, resolved);
-      }
-      (row as any)[col.alias || col.relation] = data;
-    }
-  }
-  return row;
+  return { mock, workers };
 }

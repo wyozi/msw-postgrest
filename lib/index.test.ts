@@ -1,21 +1,13 @@
 import { PostgrestClient } from "@supabase/postgrest-js";
 import { setupServer } from "msw/node";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { mswPostgrest } from ".";
+import { Database } from "./database.types";
 
 const POSTGREST_URL = "http://localhost";
 
-const { database, workers } = mswPostgrest({
+const { mock, workers } = mswPostgrest<Database>({
   postgrestUrl: POSTGREST_URL,
-  schema: { blobs: { id: { type: "uuid", autoGenerate: true } } },
 });
 const server = setupServer(...workers);
 
@@ -26,229 +18,31 @@ afterAll(() => server.close());
 
 describe("msw-postgrest", () => {
   const postgrest = new PostgrestClient(POSTGREST_URL);
-  beforeEach(() => {
-    database.clear();
+
+  it("select works", async () => {
+    mock
+      .from("shops")
+      .select("id, address")
+      .reply(() => [{ id: 1, address: "foo" }]);
+
+    const res = await postgrest.from("shops").select("id, address");
+
+    expect(res.data).toEqual([{ id: 1, address: "foo" }]);
   });
 
-  describe("schema", () => {
-    describe("autogenerate", () => {
-      it("autogenerates uuid", () => {
-        database.insert("blobs", {});
-        expect(database.select("blobs")).toEqual([
-          {
-            id: expect.stringMatching(
-              /^[0-9A-F]{8}-[0-9A-F]{4}-[4][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i
-            ),
-          },
-        ]);
-      });
-    });
-  });
+  it("insert works", async () => {
+    const shopsMock = mock
+      .from("shops")
+      .insert()
+      .select("id, address")
+      .reply(() => [{ id: 2, address: "foo" }]);
 
-  describe("returns", () => {
-    describe("single", () => {
-      it("returns if single result", async () => {
-        database.insert("tasks", { item: "empty fridge" });
+    const res = await postgrest
+      .from("shops")
+      .insert({ address: "foo" })
+      .select("id, address");
 
-        expect(
-          (await postgrest.from("tasks").select("*").single()).data
-        ).toEqual({ item: "empty fridge" });
-      });
-      it("errors if non-single result", async () => {
-        database.insert("tasks", { item: "empty fridge" });
-        database.insert("tasks", { item: "fill fridge" });
-
-        expect(
-          (await postgrest.from("tasks").select("*").single()).error
-        ).toEqual({ message: "returned rows is not one" });
-      });
-    });
-    describe("maybeSingle", () => {
-      it("returns if no results", async () => {
-        expect(
-          (await postgrest.from("tasks").select("*").maybeSingle()).data
-        ).toEqual(null);
-      });
-      it("returns if single result", async () => {
-        database.insert("tasks", { item: "empty fridge" });
-
-        expect(
-          (await postgrest.from("tasks").select("*").maybeSingle()).data
-        ).toEqual({ item: "empty fridge" });
-      });
-      it("errors if non-single result", async () => {
-        database.insert("tasks", { item: "empty fridge" });
-        database.insert("tasks", { item: "fill fridge" });
-
-        expect(
-          (await postgrest.from("tasks").select("*").maybeSingle()).error
-        ).toEqual(
-          expect.objectContaining({
-            message: expect.stringContaining("multiple (or no) rows returned"),
-          })
-        );
-      });
-    });
-  });
-
-  describe("selections", () => {
-    it("simple select", async () => {
-      database.insert("tasks", { item: "empty fridge" });
-      database.insert("tasks", { item: "go shopping" });
-
-      expect((await postgrest.from("tasks").select("*")).data).toEqual([
-        { item: "empty fridge" },
-        { item: "go shopping" },
-      ]);
-    });
-    it("ordered select", async () => {
-      database.insert("tasks", { item: "empty fridge" });
-      database.insert("tasks", { item: "go shopping" });
-
-      expect(
-        (await postgrest.from("tasks").select("*").order("item")).data
-      ).toEqual([{ item: "empty fridge" }, { item: "go shopping" }]);
-    });
-    it("select with limit", async () => {
-      database.insert("tasks", { item: "empty fridge" });
-      database.insert("tasks", { item: "go shopping" });
-
-      expect((await postgrest.from("tasks").select("*").limit(1)).data).toEqual(
-        [{ item: "empty fridge" }]
-      );
-    });
-    it("selective select", async () => {
-      database.insert("tasks", {
-        item: "empty fridge",
-        created_at: "2023-02-23",
-      });
-      database.insert("tasks", {
-        item: "go shopping",
-        created_at: "2023-05-23",
-      });
-
-      expect((await postgrest.from("tasks").select("created_at")).data).toEqual(
-        [{ created_at: "2023-02-23" }, { created_at: "2023-05-23" }]
-      );
-    });
-    it("complex filtered select", async () => {
-      database.insert("tasks", {
-        item: "sell curtains",
-        group_id: "grp",
-        meta: { tagColor: "red" },
-      });
-      database.insert("tasks", {
-        item: "grab lemons",
-        group_id: "grp",
-        meta: { tagColor: "green" },
-      });
-
-      expect(
-        (
-          await postgrest
-            .from("tasks")
-            .select("item, meta->>tagColor")
-            .eq("group_id", "grp")
-            .eq("meta->>tagColor", "red")
-        ).data
-      ).toEqual([{ item: "sell curtains", tagColor: "red" }]);
-    });
-  });
-
-  describe("insertions", () => {
-    it("insert single items", async () => {
-      await postgrest.from("tasks").insert({ item: "do chores" });
-      expect(database.select("tasks")).toEqual([{ item: "do chores" }]);
-    });
-    it("insert multi items", async () => {
-      await postgrest
-        .from("tasks")
-        .insert([{ item: "do chores" }, { item: "buy apples" }]);
-      expect(database.select("tasks")).toEqual([
-        { item: "do chores" },
-        { item: "buy apples" },
-      ]);
-    });
-    it("insert item and return values", async () => {
-      const res = await postgrest
-        .from("tasks")
-        .insert({
-          item: "do chores",
-          meta: { location: "Finland", temperature: 23 },
-        })
-        .select("item, meta->location");
-      expect(res.data).toEqual([{ item: "do chores", location: "Finland" }]);
-    });
-  });
-
-  describe("updates", () => {
-    it("update item by id", async () => {
-      database.insert("tasks", { item: "mop floors", id: "1234" });
-      await postgrest
-        .from("tasks")
-        .update({ item: "mop and wax floors" })
-        .eq("id", "1234");
-      expect(database.select("tasks")).toEqual([
-        { item: "mop and wax floors", id: "1234" },
-      ]);
-    });
-  });
-
-  describe("relationships", () => {
-    it("allow simple joins", async () => {
-      database.insert("tasks", { item: "mop floors", assigned_to: "person-2" });
-      database.insert("people", { id: "person-1", name: "Mike" });
-      database.insert("people", { id: "person-2", name: "John" });
-      database.addRelationshipResolver("tasks", "people", (row, target) => {
-        return target.find((r) => r.id === row.assigned_to)!;
-      });
-
-      const d = (
-        await postgrest.from("tasks").select("item, assignee:people(name)")
-      ).data;
-      expect(d).toEqual([{ item: "mop floors", assignee: { name: "John" } }]);
-    });
-
-    it("allow nested joins", async () => {
-      database.insert("tasks", { item: "mop floors", assigned_to: "person-1" });
-      database.insert("people", {
-        id: "person-1",
-        name: "Mike",
-        group_id: "grp-1",
-      });
-      database.insert("people", { id: "person-2", name: "John" });
-      database.insert("groups", { id: "grp-1", name: "Cleaning Crew" });
-
-      database.addRelationshipResolver("tasks", "people", (row, target) => {
-        return target.find((r) => r.id === row.assigned_to)!;
-      });
-      database.addRelationshipResolver("people", "groups", (row, target) => {
-        return target.find((r) => r.id === row.group_id)!;
-      });
-
-      const d = (
-        await postgrest
-          .from("tasks")
-          .select("item, assignee:people(name, group:groups(name))")
-      ).data;
-      expect(d).toEqual([
-        {
-          item: "mop floors",
-          assignee: { name: "Mike", group: { name: "Cleaning Crew" } },
-        },
-      ]);
-    });
-
-    it("works with empty tables", async () => {
-      database.insert("tasks", { item: "mop floors", assigned_to: "person-2" });
-      database.addRelationshipResolver("tasks", "people", (row, target) => {
-        return target.find((r) => r.id === row.assigned_to) ?? null;
-      });
-
-      const d = (
-        await postgrest.from("tasks").select("item, assignee:people(name)")
-      ).data;
-      expect(d).toEqual([{ item: "mop floors", assignee: null }]);
-    });
+    expect(shopsMock.body).toEqual({ address: "foo" });
+    expect(res.data).toEqual([{ id: 2, address: "foo" }]);
   });
 });

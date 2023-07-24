@@ -20,7 +20,7 @@ import { mswPostgrest } from "msw-postgrest";
 
 const POSTGREST_URL = "http://localhost";
 
-const { database, workers } = mswPostgrest({ postgrestUrl: POSTGREST_URL });
+const { mock, workers } = mswPostgrest({ postgrestUrl: POSTGREST_URL });
 const server = setupServer(...workers);
 
 // Ideally you'd move this to a setupTests file
@@ -33,8 +33,18 @@ describe("msw-postgrest", () => {
 
   describe("insertions", () => {
     it("insert single items", async () => {
-      await postgrest.from("tasks").insert({ item: "do chores" });
-      expect(database.select("tasks")).toEqual([{ item: "do chores" }]);
+      mock
+        .from("shops")
+        .insert()
+        .select("id, address")
+        .reply(() => [{ id: 2, address: "foo" }]);
+
+      const res = await postgrest
+        .from("shops")
+        .insert({ address: "foo" })
+        .select("id, address");
+
+      expect(res.data).toEqual([{ id: 2, address: "foo" }]);
     });
   });
 });
@@ -58,7 +68,7 @@ import { mswPostgrest } from "msw-postgrest";
 
 const SUPABASE_URL = "http://localhost";
 
-const { database, workers } = mswPostgrest({
+const { mock, workers } = mswPostgrest({
   postgrestUrl: `${SUPABASE_URL}/rest/v1`,
 });
 const server = setupServer(...workers);
@@ -73,8 +83,18 @@ describe("msw-postgrest", () => {
 
   describe("insertions", () => {
     it("insert single items", async () => {
-      await supa.from("tasks").insert({ item: "do chores" });
-      expect(database.select("tasks")).toEqual([{ item: "do chores" }]);
+      mock
+        .from("shops")
+        .insert()
+        .select("id, address")
+        .reply(() => [{ id: 2, address: "foo" }]);
+
+      const res = await supa
+        .from("shops")
+        .insert({ address: "foo" })
+        .select("id, address");
+
+      expect(res.data).toEqual([{ id: 2, address: "foo" }]);
     });
   });
 });
