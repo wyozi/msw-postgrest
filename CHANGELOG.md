@@ -1,5 +1,11 @@
 # msw-postgrest
 
+## 0.1.1
+
+### Patch Changes
+
+- add missing operation functions and delete msw
+
 ## 0.1.0
 
 ### Minor Changes

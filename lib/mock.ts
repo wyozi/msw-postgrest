@@ -31,6 +31,21 @@ export class PostgrestMock<
     return this;
   }
 
+  update(): PostgrestMock<Schema, Relation, Relationships, unknown> {
+    this.operation = "update";
+    return this;
+  }
+
+  upsert(): PostgrestMock<Schema, Relation, Relationships, unknown> {
+    this.operation = "upsert";
+    return this;
+  }
+
+  delete(): PostgrestMock<Schema, Relation, Relationships, unknown> {
+    this.operation = "delete";
+    return this;
+  }
+
   reply(
     fun: () => ResultOne[]
   ): PostgrestMock<Schema, Relation, Relationships, ResultOne> {

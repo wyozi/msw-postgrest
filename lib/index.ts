@@ -94,7 +94,25 @@ export function mswPostgrest<
       const table = req.params.table;
 
       const match = mock.popFirstMatching(
-        (m) => m.relation === table && m.operation === "insert"
+        (m) =>
+          m.relation === table &&
+          (m.operation === "insert" || m.operation === "upsert")
+      );
+      if (match) {
+        match.body = await req.json();
+        return res(ctx.json(match.replyFun()));
+      } else {
+        return res(
+          ctx.json({ message: "no msw-postgrest match found" }),
+          ctx.status(400)
+        );
+      }
+    }),
+    rest.delete(`${postgrestUrl}/:table`, async (req, res, ctx) => {
+      const table = req.params.table;
+
+      const match = mock.popFirstMatching(
+        (m) => m.relation === table && m.operation === "delete"
       );
       if (match) {
         match.body = await req.json();
