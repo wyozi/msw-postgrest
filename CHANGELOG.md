@@ -1,5 +1,16 @@
 # msw-postgrest
 
+## 0.1.0
+
+### Minor Changes
+
+- d7ae559: completely revamp how this library works
+
+### Patch Changes
+
+- a2c625e: add schema
+- ff12bee: unify select logic and fix json arrow bug
+
 ## 0.0.9
 
 ### Patch Changes
