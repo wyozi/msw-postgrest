@@ -35,6 +35,14 @@ class MswPostgrestClient<Schema extends GenericSchema = any> {
       return null;
     }
   }
+
+  unusedMockCount() {
+    return this.mockQueue.length;
+  }
+
+  clear() {
+    this.mockQueue.length = 0;
+  }
 }
 
 export function mswPostgrest<
