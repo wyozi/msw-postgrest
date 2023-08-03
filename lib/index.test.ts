@@ -45,4 +45,21 @@ describe("msw-postgrest", () => {
     expect(shopsMock.body).toEqual({ address: "foo" });
     expect(res.data).toEqual([{ id: 2, address: "foo" }]);
   });
+
+  it("update works", async () => {
+    const shopsMock = mock
+      .from("shops")
+      .update()
+      .select("id, address")
+      .reply(() => [{ id: 2, address: "bar" }]);
+
+    const res = await postgrest
+      .from("shops")
+      .update({ address: "bar" })
+      .eq("id", 1)
+      .select("id, address");
+
+    expect(shopsMock.body).toEqual({ address: "bar" });
+    expect(res.data).toEqual([{ id: 2, address: "bar" }]);
+  });
 });
